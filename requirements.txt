@@ -1,11 +1,8 @@
-IbPy2
+ibapi
 numpy
 pandas
-pytz
-PyYAML
-pyzmq
-scipy
 TA-Lib
+queue
 
 
 
