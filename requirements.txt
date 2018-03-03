@@ -1,0 +1,12 @@
+IbPy2
+numpy
+pandas
+pytz
+PyYAML
+pyzmq
+scipy
+TA-Lib
+
+
+
+
