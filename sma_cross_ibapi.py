@@ -1,6 +1,9 @@
 from ibapi.wrapper import EWrapper
 from ibapi.client import EClient
+from ibapi.order import Order
 from ibapi.contract import Contract as IBcontract
+from helpers import identifed_as, list_of_identified_items, SimpleCache
+from trade_logic import TradeLogic
 from threading import Thread
 import queue
 import datetime
@@ -12,6 +15,7 @@ import talib
 DEFAULT_HISTORIC_DATA_ID=50
 DEFAULT_GET_CONTRACT_ID=43
 
+
 ACCOUNT_UPDATE_FLAG = "update"
 ACCOUNT_VALUE_FLAG = "value"
 ACCOUNT_TIME_FLAG = "time"
@@ -22,88 +26,10 @@ STARTED = object()
 TIME_OUT = object()
 
 
-class identifed_as(object):
-    # сортировка ответов от api
-    def __init__(self, label, data):
-        self.label = label
-        self.data = data
-
-    def __repr__(self):
-        return "Identified as %s" % self.label
 
         # общий список распознаных ответов от api
 
-
-class list_of_identified_items(list):
-    """
-    A list of elements, each of class identified_as (or duck equivalent)
-
-    Used to seperate out accounting data
-    """
-
-    def seperate_into_dict(self):
-        """
-
-        :return: dict, keys are labels, each element is a list of items matching label
-        """
-
-        all_labels = [element.label for element in self]
-        dict_data = dict([
-            (label,
-             [element.data for element in self if element.label == label])
-            for label in all_labels])
-
-        return dict_data
-
-class tradeLogic(object):
-
-    def __init__(self):
-
-        pass
-
-    def cross_signal(self, historic_data):
-        df = pd.DataFrame(historic_data, columns=('time',
-                                                  'open', 'hight',
-                                                  'low', 'close',
-                                                  'vol'))
-
-        data = np.array(df.close)
-
-
-        ma_short = talib.SMA(data, timeperiod=20)[-1]
-        ma_long = talib.SMA(data, timeperiod=50)[-1]
-
-        allow = ma_short > ma_long
-        return allow
-
-    def trade_logic(self, position, signal, pos_vol):
-
-        print("allow: ", signal, '\n', 'position: ', position)
-        # Обновляем дынные по позициям
-
-        if signal:  # проверка пересечения
-            print("\n", "signal to open long position", "\n")
-            if position == 0:
-                print('open long')
-                #self.ib_order = OrderIB.create_order('MKT', pos_volume, 'BUY')
-
-            elif position < 0:  # выставляем ордер с учетом перекрытия текущей позиции
-                print('reverse short')
-                #self.ib_order = OrderIB.create_order("MKT", abs(self.position) + pos_volume, "BUY")
-            #return self.ib_order
-        elif not signal:
-            print("\n", "signal to open short position", "\n")
-            if position == 0:
-                #self.ib_order = OrderIB.create_order('MKT', pos_volume, 'SELL')
-                print('open short')
-            elif position > 0:
-                # перворачиваем текущую длинную позицию
-                #self.ib_order = OrderIB.create_order("MKT", abs(self.position) + pos_volume, "SELL")
-                print('reverse long')
-
-            #return self.ib_order
-
-class finishableQueue(object):
+class FinishableQueue(object):
 
     def __init__(self, queue_to_finish):
 
@@ -142,145 +68,11 @@ class finishableQueue(object):
         return self.status is TIME_OUT
 
 
-class simpleCache(object):
-    """
-    Cache is stored in _cache in nested dict, outer key is accountName, inner key is cache label
-    """
-    def __init__(self, max_staleness_seconds):
-        self._cache = dict()
-        self._cache_updated_local_time = dict()
-
-        self._max_staleness_seconds = max_staleness_seconds
-
-    def __repr__(self):
-        return "Cache with labels"+",".join(self._cache.keys())
-
-    def update_data(self, accountName):
-        raise Exception("You need to set this method in an inherited class")
-
-    def _get_last_updated_time(self, accountName, cache_label):
-        if accountName not in self._cache_updated_local_time.keys():
-            return None
-
-        if cache_label not in self._cache_updated_local_time[accountName]:
-            return None
-
-        return self._cache_updated_local_time[accountName][cache_label]
-
-
-    def _set_time_of_updated_cache(self, accountName, cache_label):
-        # make sure we know when the cache was updated
-        if accountName not in self._cache_updated_local_time.keys():
-            self._cache_updated_local_time[accountName]={}
-
-        self._cache_updated_local_time[accountName][cache_label] = time.time()
-
-
-    def _is_data_stale(self, accountName, cache_label, ):
-        """
-        Check to see if the cached data has been updated recently for a given account and label, or if it's stale
-
-        :return: bool
-        """
-        STALE = True
-        NOT_STALE = False
-
-        last_update = self._get_last_updated_time(accountName, cache_label)
-
-        if last_update is None:
-            ## we haven't got any data, so by construction our data is stale
-            return STALE
-
-        time_now = time.time()
-        time_since_updated = time_now - last_update
-
-        if time_since_updated > self._max_staleness_seconds:
-            return STALE
-        else:
-            ## recently updated
-            return NOT_STALE
-
-    def _check_cache_empty(self, accountName, cache_label):
-        """
-
-        :param accountName: str
-        :param cache_label: str
-        :return: bool
-        """
-        CACHE_EMPTY = True
-        CACHE_PRESENT = False
-
-        cache = self._cache
-        if accountName not in cache.keys():
-            return CACHE_EMPTY
-
-        cache_this_account = cache[accountName]
-        if cache_label not in cache_this_account.keys():
-            return CACHE_EMPTY
-
-        return CACHE_PRESENT
-
-    def _return_cache_values(self, accountName, cache_label):
-        """
-
-        :param accountName: str
-        :param cache_label: str
-        :return: None or cache contents
-        """
-
-        if self._check_cache_empty(accountName, cache_label):
-            return None
-
-        return self._cache[accountName][cache_label]
-
-
-    def _create_cache_element(self, accountName, cache_label):
-
-        cache = self._cache
-        if accountName not in cache.keys():
-            cache[accountName] = {}
-
-        cache_this_account = cache[accountName]
-        if cache_label not in cache_this_account.keys():
-            cache[accountName][cache_label] = None
-
-
-    def get_updated_cache(self, accountName, cache_label):
-        """
-        Checks for stale cache, updates if needed, returns up to date value
-
-        :param accountName: str
-        :param cache_label:  str
-        :return: updated part of cache
-        """
-
-        if self._is_data_stale(accountName, cache_label) or self._check_cache_empty(accountName, cache_label):
-            self.update_data(accountName)
-
-        return self._return_cache_values(accountName, cache_label)
-
-
-    def update_cache(self, accountName, dict_with_data):
-        """
-
-        :param accountName: str
-        :param dict_with_data: dict, which has keynames with cache labels
-        :return: nothing
-        """
-
-        all_labels = dict_with_data.keys()
-        for cache_label in all_labels:
-            self._create_cache_element(accountName, cache_label)
-            self._cache[accountName][cache_label] = dict_with_data[cache_label]
-            self._set_time_of_updated_cache(accountName, cache_label)
-
-
 class TradeWrapper(EWrapper):
-
     def __init__(self):
         self._my_contract_details = {}
         self._my_historic_data_dict = {}
-        #на случай нескольких аккаунтов используем словарь
+        # на случай нескольких аккаунтов используем словарь
         self._my_accounts = {}
 
         ## We set these up as we could get things coming along before we run an init
@@ -288,7 +80,7 @@ class TradeWrapper(EWrapper):
         self._my_errors = queue.Queue()
 
     def init_error(self):
-        error_queue=queue.Queue()
+        error_queue = queue.Queue()
         self._my_errors = error_queue
 
     def get_error(self, timeout=5):
@@ -301,7 +93,7 @@ class TradeWrapper(EWrapper):
         return None
 
     def is_error(self):
-        an_error_if=not self._my_errors.empty()
+        an_error_if = not self._my_errors.empty()
         return an_error_if
 
     def error(self, id, errorCode, errorString):
@@ -320,7 +112,7 @@ class TradeWrapper(EWrapper):
 
         ## uses a simple tuple, but you could do other, fancier, things here
         position_object = (account, contract, position,
-                 avgCost)
+                           avgCost)
 
         self._my_positions.put(position_object)
 
@@ -329,44 +121,40 @@ class TradeWrapper(EWrapper):
 
         self._my_positions.put(FINISHED)
 
-
     ## get accounting data
     def init_accounts(self, accountName):
         accounting_queue = self._my_accounts[accountName] = queue.Queue()
 
         return accounting_queue
 
-
-    def updateAccountValue(self, key:str, val:str, currency:str,
-                            accountName:str):
+    def updateAccountValue(self, key: str, val: str, currency: str,
+                           accountName: str):
 
         ## use this to seperate out different account data
-        data = identifed_as(ACCOUNT_VALUE_FLAG, (key,val, currency))
+        data = identifed_as(ACCOUNT_VALUE_FLAG, (key, val, currency))
         self._my_accounts[accountName].put(data)
 
-
-    def updatePortfolio(self, contract, position:float,
-                        marketPrice:float, marketValue:float,
-                        averageCost:float, unrealizedPNL:float,
-                        realizedPNL:float, accountName:str):
+    def updatePortfolio(self, contract, position: float,
+                        marketPrice: float, marketValue: float,
+                        averageCost: float, unrealizedPNL: float,
+                        realizedPNL: float, accountName: str):
 
         ## use this to seperate out different account data
         data = identifed_as(ACCOUNT_UPDATE_FLAG, (contract, position, marketPrice, marketValue, averageCost,
-                                          unrealizedPNL, realizedPNL))
+                                                  unrealizedPNL, realizedPNL))
         self._my_accounts[accountName].put(data)
 
-    def updateAccountTime(self, timeStamp:str):
+    def updateAccountTime(self, timeStamp: str):
 
         ## use this to seperate out different account data
         data = identifed_as(ACCOUNT_TIME_FLAG, timeStamp)
         self._my_accounts[accountName].put(data)
 
-
-    def accountDownloadEnd(self, accountName:str):
+    def accountDownloadEnd(self, accountName: str):
 
         self._my_accounts[accountName].put(FINISHED)
 
-    #Исторические данные
+    # Исторические данные
 
     ## get contract details code
     def init_contractdetails(self, reqId):
@@ -395,14 +183,13 @@ class TradeWrapper(EWrapper):
 
         return historic_data_queue
 
-
-    def historicalData(self, tickerid , bar):
+    def historicalData(self, tickerid, bar):
 
         ## Overriden method
         ## Note I'm choosing to ignore barCount, WAP and hasGaps but you could use them if you like
-        bardata=(bar.date, bar.open, bar.high, bar.low, bar.close, bar.volume)
+        bardata = (bar.date, bar.open, bar.high, bar.low, bar.close, bar.volume)
 
-        historic_data_dict=self._my_historic_data_dict
+        historic_data_dict = self._my_historic_data_dict
 
         ## Add on to the current data
         if tickerid not in historic_data_dict.keys():
@@ -410,13 +197,28 @@ class TradeWrapper(EWrapper):
 
         historic_data_dict[tickerid].put(bardata)
 
-    def historicalDataEnd(self, tickerid, start:str, end:str):
+    def historicalDataEnd(self, tickerid, start: str, end: str):
         ## overriden method
 
         if tickerid not in self._my_historic_data_dict.keys():
             self.init_historicprices(tickerid)
 
         self._my_historic_data_dict[tickerid].put(FINISHED)
+
+        #order id receiving
+
+    def init_nextvalidid(self):
+
+        orderid_queue = self._my_orderid_data = queue.Queue()
+
+        return orderid_queue
+
+    def nextValidId(self, orderId):
+
+        if getattr(self, '_my_orderid_data', None) is None:
+            self.init_nextvalidid()
+
+        self._my_orderid_data.put(orderId)
 
 
 class TradeClient(EClient):
@@ -430,7 +232,7 @@ class TradeClient(EClient):
         EClient.__init__(self, wrapper)
 
         ## We use these to store accounting data
-        self._account_cache = simpleCache(max_staleness_seconds=5 * 60)
+        self._account_cache = SimpleCache(max_staleness_seconds=5 * 60)
         ## override function
         self._account_cache.update_data = self._update_accounting_data
 
@@ -442,7 +244,7 @@ class TradeClient(EClient):
         """
 
         ## Make a place to store the data we're going to return
-        positions_queue = finishableQueue(self.init_positions())
+        positions_queue = FinishableQueue(self.init_positions())
 
         ## ask for the data
         self.reqPositions()
@@ -468,7 +270,7 @@ class TradeClient(EClient):
         """
 
         ## Make a place to store the data we're going to return
-        accounting_queue = finishableQueue(self.init_accounts(accountName))
+        accounting_queue = FinishableQueue(self.init_accounts(accountName))
 
         ## ask for the data
         self.reqAccountUpdates(True, accountName)
@@ -534,7 +336,7 @@ class TradeClient(EClient):
 
         ## Make a place to store the data we're going to return
         # cjздаем декоратор для приема данных
-        contract_details_queue = finishableQueue(self.init_contractdetails(reqId))
+        contract_details_queue = FinishableQueue(self.init_contractdetails(reqId))
 
         print("Getting full contract details from the server... ")
         # запрашиваем данные контракта у api
@@ -567,6 +369,30 @@ class TradeClient(EClient):
 
         return resolved_ibcontract
 
+    def get_next_brokerorderid(self):
+        """
+        Get next broker order id
+        :return: broker order id, int; or TIME_OUT if unavailable
+        """
+
+        ## Make a place to store the data we're going to return
+        orderid_q = self.init_nextvalidid()
+
+        self.reqIds(-1)  # -1 is irrelevant apparently (see IB API docs)
+
+        ## Run until we get a valid contract(s) or get bored waiting
+        MAX_WAIT_SECONDS = 10
+        try:
+            brokerorderid = orderid_q.get(timeout=MAX_WAIT_SECONDS)
+        except queue.Empty:
+            print("Wrapper timeout waiting for broker orderid")
+            brokerorderid = TIME_OUT
+
+        while self.wrapper.is_error():
+            print(self.get_error(timeout=MAX_WAIT_SECONDS))
+
+            return brokerorderid
+
     def get_IB_historical_data(self, ibcontract, durationStr="1 D", barSizeSetting="5 mins",
                                tickerid=DEFAULT_HISTORIC_DATA_ID):
 
@@ -577,7 +403,7 @@ class TradeClient(EClient):
         """
 
         ## Make a place to store the data we're going to return
-        historic_data_queue = finishableQueue(self.init_historicprices(tickerid))
+        historic_data_queue = FinishableQueue(self.init_historicprices(tickerid))
 
         # Request some historical data. Native method in EClient
         self.reqHistoricalData(
@@ -609,9 +435,30 @@ class TradeClient(EClient):
 
         return historic_data
 
+    def place_new_IB_order(self, ibcontract, order, orderid=None):
+
+        ## We can eithier supply our own ID or ask IB to give us the next valid one
+
+        if orderid is None:
+            print("Getting orderid from IB")
+            orderid = self.get_next_brokerorderid()
+
+            if orderid is TIME_OUT:
+                raise Exception("I couldn't get an orderid from IB, and you didn't provide an orderid")
+
+        print("Using order id:", orderid)
+
+        # Place the order
+
+        self.placeOrder(orderid, ibcontract, order)
+
+        return orderid
+
 
 class TradeApp(TradeWrapper, TradeClient):
+
     def __init__(self, ipaddress, portid, clientid):
+
         TradeWrapper.__init__(self)
         TradeClient.__init__(self, wrapper=self)
 
@@ -621,10 +468,14 @@ class TradeApp(TradeWrapper, TradeClient):
         thread.start()
 
         setattr(self, "_thread", thread)
+
+
+
+
 if __name__ == '__main__':
 
     app = TradeApp("127.0.0.1", 7497, 0)
-    tr = tradeLogic()
+    tr = TradeLogic()
     ibcontract = IBcontract()
     ibcontract.symbol = "EUR"
     ibcontract.secType = "CASH"
@@ -646,19 +497,31 @@ if __name__ == '__main__':
     accounting_updates = app.get_accounting_updates(accountName)
     print(accounting_updates)
 
+
+
     try:
         while True:
             resolved_ibcontract = app.resolve_ib_contract(ibcontract)
             historic_data = app.get_IB_historical_data(resolved_ibcontract)
 
             signal = tr.cross_signal(historic_data)
+            order1 = Order()
+            order1.action = "BUY"
+
+            order1.orderType = "MKT"
+
+            order1.totalQuantity = 1000
+
+            order1.transmit = True
+            orderid1 = app.place_new_IB_order(ibcontract, order1, orderid=None)
+            print("Placed market order, orderid is %d" % orderid1)
 
             tr.trade_logic(positions_list[0][2], signal, 20000)
+
             time.sleep(30)
 
     finally:
         app.disconnect()
-
 
 
 
