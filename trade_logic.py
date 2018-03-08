@@ -2,11 +2,22 @@ import pandas as pd
 import numpy as np
 import talib
 
+from ibapi.order import Order
+
 
 class TradeLogic(object):
     def __init__(self):
+        self.ib_order = None
 
-        pass
+
+    def create_order(order_type, quantity, action):
+        order = Order()
+        order.orderType = order_type
+        order.totalQuantity = quantity
+        order.action = action
+        order.transmit = True
+
+        return order
 
     def cross_signal(self, historic_data):
         df = pd.DataFrame(historic_data, columns=('time',
@@ -31,7 +42,8 @@ class TradeLogic(object):
             print("\n", "signal to open long position", "\n")
             if position == 0:
                 print('open long')
-                # self.ib_order = OrderIB.create_order('MKT', pos_volume, 'BUY')
+                self.ib_order = self.create_order('MKT', pos_volume, 'BUY')
+                return self.ib_order
 
             elif position < 0:  # выставляем ордер с учетом перекрытия текущей позиции
                 print('reverse short')
