@@ -47,8 +47,8 @@ class TradeLogic(object):
 
             elif position < 0:  # выставляем ордер с учетом перекрытия текущей позиции
                 print('reverse short')
-                # self.ib_order = OrderIB.create_order("MKT", abs(self.position) + pos_volume, "BUY")
-                # return self.ib_order
+                self.ib_order = Order.create_order("MKT", abs(self.position) + pos_volume, "BUY")
+                return self.ib_order
         elif not signal:
             print("\n", "signal to open short position", "\n")
             if position == 0:
