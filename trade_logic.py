@@ -3,6 +3,7 @@ import numpy as np
 import talib
 
 from ibapi.order import Order
+from ibapi.contract import Contract as IBcontract
 
 
 class TradeLogic(object):
@@ -10,8 +11,7 @@ class TradeLogic(object):
         self.ib_order = None
         self.pos_volume = 5000
 
-
-    def create_order(order_type, quantity, action):
+    def create_order(self, order_type, quantity, action):
         order = Order()
         order.orderType = order_type
         order.totalQuantity = quantity
@@ -19,6 +19,17 @@ class TradeLogic(object):
         order.transmit = True
 
         return order
+
+
+    def create_contract(self, symbol, currency):
+
+        ibcontract = IBcontract()
+        ibcontract.symbol = symbol
+        ibcontract.secType = "CASH"
+        ibcontract.currency = currency
+        ibcontract.exchange = "IDEALPRO"
+
+        return ibcontract
 
     def cross_signal(self, historic_data):
         df = pd.DataFrame(historic_data, columns=('time',
@@ -48,16 +59,16 @@ class TradeLogic(object):
 
             elif position < 0:  # выставляем ордер с учетом перекрытия текущей позиции
                 print('reverse short')
-                self.ib_order = Order.create_order("MKT", abs(self.position) + pos_volume, "BUY")
+                self.ib_order = self.create_order("MKT", abs(self.position) + pos_volume, "BUY")
                 return self.ib_order
         elif not signal:
             print("\n", "signal to open short position", "\n")
             if position == 0:
-                self.ib_order = Order.create_order('MKT', pos_volume, 'SELL')
+                self.ib_order = self.create_order('MKT', pos_volume, 'SELL')
                 print('open short')
             elif position > 0:
                 # перворачиваем текущую длинную позицию
-                # self.ib_order = OrderIB.create_order("MKT", abs(self.position) + pos_volume, "SELL")
+                self.ib_order = self.create_order("MKT", abs(self.position) + pos_volume, "SELL")
                 print('reverse long')
 
-                # return self.ib_order
+                return self.ib_order

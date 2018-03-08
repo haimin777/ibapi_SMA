@@ -8,9 +8,7 @@ from threading import Thread
 import queue
 import datetime
 import time
-import numpy as np
-import pandas as pd
-import talib
+
 
 DEFAULT_HISTORIC_DATA_ID=50
 DEFAULT_GET_CONTRACT_ID=43
@@ -476,12 +474,7 @@ if __name__ == '__main__':
 
     app = TradeApp("127.0.0.1", 7497, 0)
     tr = TradeLogic()
-    ibcontract = IBcontract()
-    ibcontract.symbol = "EUR"
-    ibcontract.secType = "CASH"
-    ibcontract.currency = "GBP"
-    ibcontract.exchange = "IDEALPRO"
-    ## lets get positions
+    ibcontract = tr.create_contract('EUR', 'GBP')
     positions_list = app.get_current_positions()
     print(positions_list)
     print('pos 1', positions_list[0][2])
@@ -505,14 +498,9 @@ if __name__ == '__main__':
             historic_data = app.get_IB_historical_data(resolved_ibcontract)
 
             signal = tr.cross_signal(historic_data)
-            order1 = Order()
-            order1.action = "BUY"
 
-            order1.orderType = "MKT"
-
-            order1.totalQuantity = 1000
-
-            order1.transmit = True
+            order1 = tr.create_order('MKT', 1000, 'BUY')
+            print(order1.orderType)
             orderid1 = app.place_new_IB_order(ibcontract, order1, orderid=None)
             print("Placed market order, orderid is %d" % orderid1)
 
