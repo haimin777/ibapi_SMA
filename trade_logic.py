@@ -8,6 +8,7 @@ from ibapi.order import Order
 class TradeLogic(object):
     def __init__(self):
         self.ib_order = None
+        self.pos_volume = 5000
 
 
     def create_order(order_type, quantity, action):
@@ -37,7 +38,7 @@ class TradeLogic(object):
 
         print("allow: ", signal, '\n', 'position: ', position)
         # Обновляем дынные по позициям
-
+        pos_volume = self.pos_volume
         if signal:  # проверка пересечения
             print("\n", "signal to open long position", "\n")
             if position == 0:
