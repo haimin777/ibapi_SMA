@@ -53,7 +53,7 @@ class TradeLogic(object):
         elif not signal:
             print("\n", "signal to open short position", "\n")
             if position == 0:
-                # self.ib_order = OrderIB.create_order('MKT', pos_volume, 'SELL')
+                self.ib_order = Order.create_order('MKT', pos_volume, 'SELL')
                 print('open short')
             elif position > 0:
                 # перворачиваем текущую длинную позицию
