@@ -45,7 +45,7 @@ class TradeLogic(object):
         allow = ma_short > ma_long
         return allow
 
-    def trade_logic(self, position, signal, pos_vol):
+    def trade_logic(self, position, signal):
 
         print("allow: ", signal, '\n', 'position: ', position)
         # Обновляем дынные по позициям
@@ -59,7 +59,7 @@ class TradeLogic(object):
 
             elif position < 0:  # выставляем ордер с учетом перекрытия текущей позиции
                 print('reverse short')
-                self.ib_order = self.create_order("MKT", abs(self.position) + pos_volume, "BUY")
+                self.ib_order = self.create_order("MKT", abs(position) + pos_volume, "BUY")
                 return self.ib_order
         elif not signal:
             print("\n", "signal to open short position", "\n")
@@ -68,7 +68,7 @@ class TradeLogic(object):
                 print('open short')
             elif position > 0:
                 # перворачиваем текущую длинную позицию
-                self.ib_order = self.create_order("MKT", abs(self.position) + pos_volume, "SELL")
+                self.ib_order = self.create_order("MKT", abs(position) + pos_volume, "SELL")
                 print('reverse long')
 
                 return self.ib_order

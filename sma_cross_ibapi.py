@@ -363,7 +363,7 @@ class TradeClient(EClient):
         new_contract_details = new_contract_details[0]
 
         resolved_ibcontract = new_contract_details.summary
-        print(resolved_ibcontract)
+       # print(resolved_ibcontract)
 
         return resolved_ibcontract
 
@@ -433,6 +433,8 @@ class TradeClient(EClient):
 
         return historic_data
 
+
+
     def place_new_IB_order(self, ibcontract, order, orderid=None):
 
         ## We can eithier supply our own ID or ask IB to give us the next valid one
@@ -474,44 +476,49 @@ if __name__ == '__main__':
 
     app = TradeApp("127.0.0.1", 7497, 0)
     tr = TradeLogic()
+
     ibcontract = tr.create_contract('EUR', 'GBP')
+    # определяем валидный ordeID
+
     positions_list = app.get_current_positions()
-    print(positions_list)
-    print('pos 1', positions_list[0][2])
-
-    ## get the account name from the position
-    ## normally you would know your account name
-    accountName = positions_list[0][0]
-    ## and accounting information
-    accounting_values = app.get_accounting_values(accountName)
-    print(accounting_values)
-    ## these values are cached
-    ## if we ask again in more than 5 minutes it will update everything
-    accounting_updates = app.get_accounting_updates(accountName)
-    print(accounting_updates)
+    print("positions list: ","\n", positions_list)
+    if len(positions_list) != 0:
+        print('__________________________', '\n',
+            'pos: ', positions_list[0][1].localSymbol, ':', positions_list[0][2])
+        accountName = positions_list[0][0]
+        accounting_values = app.get_accounting_values(accountName)
+        accounting_updates = app.get_accounting_updates(accountName)
+        print("acc val:", accounting_updates)
 
 
+
+    else:
+        print("__________STAR position is empty__________")
+
+
+    orID = app.get_next_brokerorderid()
+
+    print('id:', orID)
 
     try:
         while True:
+            positions_list = app.get_current_positions()
+
             resolved_ibcontract = app.resolve_ib_contract(ibcontract)
             historic_data = app.get_IB_historical_data(resolved_ibcontract)
-
             signal = tr.cross_signal(historic_data)
+            tr.trade_logic(positions_list[0][2], signal)
 
-            order1 = tr.create_order('MKT', 1000, 'BUY')
-            print(order1.orderType)
-            orderid1 = app.place_new_IB_order(ibcontract, order1, orderid=None)
-            print("Placed market order, orderid is %d" % orderid1)
+            try:
 
-            tr.trade_logic(positions_list[0][2], signal, 20000)
+                orderid1 = app.place_new_IB_order(ibcontract, tr.ib_order, orderid=None)
+                print("Placed market order, orderid is %d" % orderid1)
+                tr.ib_order = None
+            except AttributeError:
+                print("already placed")
 
-            time.sleep(30)
+            finally:
+                time.sleep(30)
 
     finally:
         app.disconnect()
-
-
-
-
-
