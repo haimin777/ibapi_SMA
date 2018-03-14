@@ -109,7 +109,7 @@ class TradeWrapper(EWrapper):
                  avgCost):
 
         ## uses a simple tuple, but you could do other, fancier, things here
-        position_object = (account, contract, position,
+        position_object = (account, contract.localSymbol, position,
                            avgCost)
 
         self._my_positions.put(position_object)
@@ -237,7 +237,6 @@ class TradeClient(EClient):
     def get_current_positions(self):
         """
         Current positions held
-
         :return:
         """
 
@@ -262,7 +261,6 @@ class TradeClient(EClient):
     def _update_accounting_data(self, accountName):
         """
         Update the accounting data in the cache
-
         :param accountName: account we want to get data for
         :return: nothing
         """
@@ -295,7 +293,6 @@ class TradeClient(EClient):
     def get_accounting_time_from_server(self, accountName):
         """
         Get the accounting time from IB server
-
         :return: accounting time as served up by IB
         """
 
@@ -306,7 +303,6 @@ class TradeClient(EClient):
     def get_accounting_values(self, accountName):
         """
         Get the accounting values from IB server
-
         :return: accounting values as served up by IB
         """
 
@@ -317,7 +313,6 @@ class TradeClient(EClient):
     def get_accounting_updates(self, accountName):
         """
         Get the accounting updates from IB server
-
         :return: accounting updates as served up by IB
         """
 
@@ -454,6 +449,13 @@ class TradeClient(EClient):
 
         return orderid
 
+    def get_positions_dict(self, positions_list):
+
+        positions_dict = {positions_list[i][1]:positions_list[i][2] for i in range(0,
+                                                                                   len(positions_list))}
+
+        return positions_dict
+
 
 class TradeApp(TradeWrapper, TradeClient):
 
@@ -478,36 +480,26 @@ if __name__ == '__main__':
     tr = TradeLogic()
 
     ibcontract = tr.create_contract('EUR', 'GBP')
-    # определяем валидный ordeID
 
     positions_list = app.get_current_positions()
-    print("positions list: ","\n", positions_list)
-    if len(positions_list) != 0:
-        print('__________________________', '\n',
-            'pos: ', positions_list[0][1].localSymbol, ':', positions_list[0][2])
-        accountName = positions_list[0][0]
-        accounting_values = app.get_accounting_values(accountName)
-        accounting_updates = app.get_accounting_updates(accountName)
-        print("acc val:", accounting_updates)
+    print("positions list: ", "\n", positions_list,
+          '\n', len(positions_list))
 
-
-
-    else:
-        print("__________STAR position is empty__________")
-
-
-    orID = app.get_next_brokerorderid()
-
-    print('id:', orID)
+    accountName = positions_list[0][0]
+    accounting_values = app.get_accounting_values(accountName)
+    accounting_updates = app.get_accounting_updates(accountName)
+    print("acc val:", accounting_updates)
 
     try:
         while True:
             positions_list = app.get_current_positions()
-
+            pos_dict = app.get_positions_dict(positions_list)
             resolved_ibcontract = app.resolve_ib_contract(ibcontract)
             historic_data = app.get_IB_historical_data(resolved_ibcontract)
             signal = tr.cross_signal(historic_data)
-            tr.trade_logic(positions_list[0][2], signal)
+            pos = pos_dict.get(str(resolved_ibcontract.localSymbol), 0)
+
+            tr.trade_logic(pos, signal)
 
             try:
 
