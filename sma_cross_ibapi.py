@@ -121,7 +121,8 @@ class TradeWrapper(EWrapper):
 
     ## get accounting data
     def init_accounts(self, accountName):
-        accounting_queue = self._my_accounts[accountName] = queue.Queue()
+        self._my_accounts[accountName] = queue.Queue()
+        accounting_queue = self._my_accounts[accountName]
 
         return accounting_queue
 
@@ -156,7 +157,8 @@ class TradeWrapper(EWrapper):
 
     ## get contract details code
     def init_contractdetails(self, reqId):
-        contract_details_queue = self._my_contract_details[reqId] = queue.Queue()
+        self._my_contract_details[reqId] = queue.Queue()
+        contract_details_queue = self._my_contract_details[reqId]
 
         return contract_details_queue
 

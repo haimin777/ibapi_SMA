@@ -1,6 +1,7 @@
 from threading import Thread
 import queue
 import time
+from ibapi.order import Order
 
 ## marker for when queue is finished
 FINISHED = object()
