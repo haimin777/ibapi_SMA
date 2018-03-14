@@ -9,10 +9,8 @@ import queue
 import datetime
 import time
 
-
-DEFAULT_HISTORIC_DATA_ID=50
-DEFAULT_GET_CONTRACT_ID=43
-
+DEFAULT_HISTORIC_DATA_ID = 50
+DEFAULT_GET_CONTRACT_ID = 43
 
 ACCOUNT_UPDATE_FLAG = "update"
 ACCOUNT_VALUE_FLAG = "value"
@@ -24,11 +22,7 @@ STARTED = object()
 TIME_OUT = object()
 
 
-
-        # общий список распознаных ответов от api
-
 class FinishableQueue(object):
-
     def __init__(self, queue_to_finish):
 
         self._queue = queue_to_finish
@@ -40,8 +34,8 @@ class FinishableQueue(object):
         :param timeout: how long to wait before giving up
         :return: list of queue elements
         """
-        contents_of_queue=[]
-        finished=False
+        contents_of_queue = []
+        finished = False
 
         while not finished:
             try:
@@ -58,7 +52,6 @@ class FinishableQueue(object):
                 ## give up and return what we have
                 finished = True
                 self.status = TIME_OUT
-
 
         return contents_of_queue
 
@@ -205,7 +198,7 @@ class TradeWrapper(EWrapper):
 
         self._my_historic_data_dict[tickerid].put(FINISHED)
 
-        #order id receiving
+        # order id receiving
 
     def init_nextvalidid(self):
 
@@ -360,7 +353,7 @@ class TradeClient(EClient):
         new_contract_details = new_contract_details[0]
 
         resolved_ibcontract = new_contract_details.summary
-       # print(resolved_ibcontract)
+        # print(resolved_ibcontract)
 
         return resolved_ibcontract
 
@@ -430,8 +423,6 @@ class TradeClient(EClient):
 
         return historic_data
 
-
-
     def place_new_IB_order(self, ibcontract, order, orderid=None):
 
         ## We can eithier supply our own ID or ask IB to give us the next valid one
@@ -453,16 +444,14 @@ class TradeClient(EClient):
 
     def get_positions_dict(self, positions_list):
 
-        positions_dict = {positions_list[i][1]:positions_list[i][2] for i in range(0,
-                                                                                   len(positions_list))}
+        positions_dict = {positions_list[i][1]: positions_list[i][2] for i in range(0,
+                                                                                    len(positions_list))}
 
         return positions_dict
 
 
 class TradeApp(TradeWrapper, TradeClient):
-
     def __init__(self, ipaddress, portid, clientid):
-
         TradeWrapper.__init__(self)
         TradeClient.__init__(self, wrapper=self)
 
@@ -472,8 +461,6 @@ class TradeApp(TradeWrapper, TradeClient):
         thread.start()
 
         setattr(self, "_thread", thread)
-
-
 
 
 if __name__ == '__main__':
