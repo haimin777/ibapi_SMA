@@ -471,13 +471,17 @@ if __name__ == '__main__':
     ibcontract = tr.create_contract('EUR', 'GBP')
 
     positions_list = app.get_current_positions()
-    print("positions list: ", "\n", positions_list,
-          '\n', len(positions_list))
+    if len(positions_list) !=0:
+        accountName = positions_list[0][0]
+        accounting_values = app.get_accounting_values(accountName)
+        accounting_updates = app.get_accounting_updates(accountName)
+        pos_dict = app.get_positions_dict(positions_list)
 
-    accountName = positions_list[0][0]
-    accounting_values = app.get_accounting_values(accountName)
-    accounting_updates = app.get_accounting_updates(accountName)
-    print("acc val:", accounting_updates)
+        print("acc balance:", accounting_values[18][1],accounting_values[18][2],
+              '\n', 'current positions:', '\n', pos_dict)
+
+    else:
+        print("_______No start positions_____")
 
     try:
         while True:
@@ -502,4 +506,8 @@ if __name__ == '__main__':
                 time.sleep(30)
 
     finally:
+        accounting_values = app.get_accounting_values(accountName)
+        print("acc balance:", accounting_values[18][1],accounting_values[18][2])
+
         app.disconnect()
+        print('current positions:', '\n', pos_dict)
