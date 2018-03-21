@@ -1,9 +1,8 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import talib
-
-from ibapi.order import Order
 from ibapi.contract import Contract as IBcontract
+from ibapi.order import Order
 
 
 class TradeLogic(object):
@@ -19,7 +18,6 @@ class TradeLogic(object):
         order.transmit = True
 
         return order
-
 
     def create_contract(self, symbol, currency):
 

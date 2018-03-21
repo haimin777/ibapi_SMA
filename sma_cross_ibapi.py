@@ -1,13 +1,13 @@
-from ibapi.wrapper import EWrapper
-from ibapi.client import EClient
-from ibapi.order import Order
-from ibapi.contract import Contract as IBcontract
-from helpers import identifed_as, list_of_identified_items, SimpleCache
-from trade_logic import TradeLogic
-from threading import Thread
-import queue
 import datetime
+import queue
 import time
+from threading import Thread
+
+from ibapi.client import EClient
+from ibapi.wrapper import EWrapper
+
+from helpers import SimpleCache, identifed_as, list_of_identified_items
+from trade_logic import TradeLogic
 
 DEFAULT_HISTORIC_DATA_ID = 50
 DEFAULT_GET_CONTRACT_ID = 43
@@ -16,7 +16,7 @@ ACCOUNT_UPDATE_FLAG = "update"
 ACCOUNT_VALUE_FLAG = "value"
 ACCOUNT_TIME_FLAG = "time"
 
-## marker for when queue is finished
+# marker for when queue is finished
 FINISHED = object()
 STARTED = object()
 TIME_OUT = object()
@@ -66,13 +66,10 @@ class TradeWrapper(EWrapper):
         # на случай нескольких аккаунтов используем словарь
         self._my_accounts = {}
 
-        ## We set these up as we could get things coming along before we run an init
+        # We set these up as we could get things coming along before we run an init
         self._my_positions = queue.Queue()
         self._my_errors = queue.Queue()
-
-    def init_error(self):
-        error_queue = queue.Queue()
-        self._my_errors = error_queue
+        self._my_orderid_data = queue.Queue()
 
     def get_error(self, timeout=5):
         if self.is_error():
@@ -88,41 +85,31 @@ class TradeWrapper(EWrapper):
         return an_error_if
 
     def error(self, id, errorCode, errorString):
-        ## Overriden method
-        errormsg = "IB error id %d errorcode %d string %s" % (id, errorCode, errorString)
-        self._my_errors.put(errormsg)
+        # Overriden method
+        if id == -1:
+            msg = "Notify (%d): Code=%d Message=%s" % (id, errorCode, errorString)
+        else:
+            msg = "Error (%d): Code=%d Message=%s" % (id, errorCode, errorString)
+        self._my_errors.put(msg)
 
-    ## get positions code
-    def init_positions(self):
-        positions_queue = self._my_positions = queue.Queue()
-
-        return positions_queue
-
-    def position(self, account, contract, position,
-                 avgCost):
-
-        ## uses a simple tuple, but you could do other, fancier, things here
-        position_object = (account, contract.localSymbol, position,
-                           avgCost)
+    def position(self, account, contract, position, avgCost):
+        # uses a simple tuple, but you could do other, fancier, things here
+        position_object = (account, contract.localSymbol, position, avgCost)
 
         self._my_positions.put(position_object)
 
     def positionEnd(self):
-        ## overriden method
-
+        # overriden method
         self._my_positions.put(FINISHED)
 
-    ## get accounting data
     def init_accounts(self, accountName):
+        # get accounting data
         self._my_accounts[accountName] = queue.Queue()
-        accounting_queue = self._my_accounts[accountName]
 
-        return accounting_queue
+        return self._my_accounts[accountName]
 
-    def updateAccountValue(self, key: str, val: str, currency: str,
-                           accountName: str):
-
-        ## use this to seperate out different account data
+    def updateAccountValue(self, key: str, val: str, currency: str, accountName: str):
+        # use this to seperate out different account data
         data = identifed_as(ACCOUNT_VALUE_FLAG, (key, val, currency))
         self._my_accounts[accountName].put(data)
 
@@ -131,67 +118,62 @@ class TradeWrapper(EWrapper):
                         averageCost: float, unrealizedPNL: float,
                         realizedPNL: float, accountName: str):
 
-        ## use this to seperate out different account data
+        # use this to seperate out different account data
         data = identifed_as(ACCOUNT_UPDATE_FLAG, (contract, position, marketPrice, marketValue, averageCost,
                                                   unrealizedPNL, realizedPNL))
         self._my_accounts[accountName].put(data)
 
     def updateAccountTime(self, timeStamp: str):
-
-        ## use this to seperate out different account data
+        # use this to seperate out different account data
         data = identifed_as(ACCOUNT_TIME_FLAG, timeStamp)
         self._my_accounts[accountName].put(data)
 
     def accountDownloadEnd(self, accountName: str):
-
         self._my_accounts[accountName].put(FINISHED)
 
     # Исторические данные
 
-    ## get contract details code
+    # get contract details code
     def init_contractdetails(self, reqId):
         self._my_contract_details[reqId] = queue.Queue()
-        contract_details_queue = self._my_contract_details[reqId]
 
-        return contract_details_queue
+        return self._my_contract_details[reqId]
 
     def contractDetails(self, reqId, contractDetails):
-        ## overridden method
-
+        # overridden method
         if reqId not in self._my_contract_details.keys():
             self.init_contractdetails(reqId)
 
         self._my_contract_details[reqId].put(contractDetails)
 
     def contractDetailsEnd(self, reqId):
-        ## overriden method
+        # overriden method
         if reqId not in self._my_contract_details.keys():
             self.init_contractdetails(reqId)
 
         self._my_contract_details[reqId].put(FINISHED)
 
-    ## Historic data code
+    # Historic data code
     def init_historicprices(self, tickerid):
         historic_data_queue = self._my_historic_data_dict[tickerid] = queue.Queue()
 
         return historic_data_queue
 
     def historicalData(self, tickerid, bar):
-
-        ## Overriden method
-        ## Note I'm choosing to ignore barCount, WAP and hasGaps but you could use them if you like
+        # Overriden method
+        # Note I'm choosing to ignore barCount, WAP and hasGaps but you could use them if you like
         bardata = (bar.date, bar.open, bar.high, bar.low, bar.close, bar.volume)
 
         historic_data_dict = self._my_historic_data_dict
 
-        ## Add on to the current data
+        # Add on to the current data
         if tickerid not in historic_data_dict.keys():
             self.init_historicprices(tickerid)
 
         historic_data_dict[tickerid].put(bardata)
 
     def historicalDataEnd(self, tickerid, start: str, end: str):
-        ## overriden method
+        # overriden method
 
         if tickerid not in self._my_historic_data_dict.keys():
             self.init_historicprices(tickerid)
@@ -201,13 +183,11 @@ class TradeWrapper(EWrapper):
         # order id receiving
 
     def init_nextvalidid(self):
+        self._my_orderid_data = queue.Queue()
 
-        orderid_queue = self._my_orderid_data = queue.Queue()
-
-        return orderid_queue
+        return self._my_orderid_data
 
     def nextValidId(self, orderId):
-
         if getattr(self, '_my_orderid_data', None) is None:
             self.init_nextvalidid()
 
@@ -234,19 +214,18 @@ class TradeClient(EClient):
         Current positions held
         :return:
         """
+        # Make a place to store the data we're going to return
+        positions_queue = FinishableQueue(self._my_positions)
 
-        ## Make a place to store the data we're going to return
-        positions_queue = FinishableQueue(self.init_positions())
-
-        ## ask for the data
+        # ask for the data
         self.reqPositions()
 
-        ## poll until we get a termination or die of boredom
+        # poll until we get a termination or die of boredom
         MAX_WAIT_SECONDS = 10
         positions_list = positions_queue.get(timeout=MAX_WAIT_SECONDS)
 
         while self.wrapper.is_error():
-            print(self.get_error())
+            print("Wrapper error:", self.get_error())
 
         if positions_queue.timed_out():
             print("Exceeded maximum wait for wrapper to confirm finished whilst getting positions")
@@ -259,31 +238,29 @@ class TradeClient(EClient):
         :param accountName: account we want to get data for
         :return: nothing
         """
-
-        ## Make a place to store the data we're going to return
+        # Make a place to store the data we're going to return
         accounting_queue = FinishableQueue(self.init_accounts(accountName))
 
-        ## ask for the data
+        # ask for the data
         self.reqAccountUpdates(True, accountName)
 
-        ## poll until we get a termination or die of boredom
+        # poll until we get a termination or die of boredom
         MAX_WAIT_SECONDS = 10
         accounting_list = accounting_queue.get(timeout=MAX_WAIT_SECONDS)
 
         while self.wrapper.is_error():
-            print(self.get_error())
+            print("Wrapper error:", self.get_error())
 
         if accounting_queue.timed_out():
             print("Exceeded maximum wait for wrapper to confirm finished whilst getting accounting data")
 
         # seperate things out, because this is one big queue of data with different things in it
         accounting_list = list_of_identified_items(accounting_list)
-        seperated_accounting_data = accounting_list.seperate_into_dict()
 
-        ## update the cache with different elements
-        self._account_cache.update_cache(accountName, seperated_accounting_data)
+        # update the cache with different elements
+        self._account_cache.update_cache(accountName, accounting_list.seperate_into_dict())
 
-        ## return nothing, information is accessed via get_... methods
+        # return nothing, information is accessed via get_... methods
 
     def get_accounting_time_from_server(self, accountName):
         """
@@ -338,7 +315,7 @@ class TradeClient(EClient):
         # если есть ошибки то возвращаем их
 
         while self.wrapper.is_error():
-            print(self.get_error())
+            print("Wrapper error:", self.get_error())
 
         if contract_details_queue.timed_out():
             print("Exceeded maximum wait for wrapper to confirm finished - seems to be normal behaviour")
@@ -363,23 +340,23 @@ class TradeClient(EClient):
         :return: broker order id, int; or TIME_OUT if unavailable
         """
 
-        ## Make a place to store the data we're going to return
-        orderid_q = self.init_nextvalidid()
+        # Make a place to store the data we're going to return
+        # REMOVED # orderid_q = self._my_orderid_data
 
         self.reqIds(-1)  # -1 is irrelevant apparently (see IB API docs)
 
-        ## Run until we get a valid contract(s) or get bored waiting
+        # Run until we get a valid contract(s) or get bored waiting
         MAX_WAIT_SECONDS = 10
         try:
-            brokerorderid = orderid_q.get(timeout=MAX_WAIT_SECONDS)
+            brokerorderid = self._my_orderid_data.get(timeout=MAX_WAIT_SECONDS)
         except queue.Empty:
             print("Wrapper timeout waiting for broker orderid")
             brokerorderid = TIME_OUT
 
         while self.wrapper.is_error():
-            print(self.get_error(timeout=MAX_WAIT_SECONDS))
+            print("get_next_brokerorderid():", self.get_error(timeout=MAX_WAIT_SECONDS))
 
-            return brokerorderid
+        return brokerorderid
 
     def get_IB_historical_data(self, ibcontract, durationStr="1 D", barSizeSetting="5 mins",
                                tickerid=DEFAULT_HISTORIC_DATA_ID):
@@ -414,7 +391,7 @@ class TradeClient(EClient):
         historic_data = historic_data_queue.get(timeout=MAX_WAIT_SECONDS)
 
         while self.wrapper.is_error():
-            print(self.get_error())
+            print("get_IB_historical_data():", self.get_error())
 
         if historic_data_queue.timed_out():
             print("Exceeded maximum wait for wrapper to confirm finished - seems to be normal behaviour")
@@ -428,7 +405,7 @@ class TradeClient(EClient):
         ## We can eithier supply our own ID or ask IB to give us the next valid one
 
         if orderid is None:
-            print("Getting orderid from IB")
+            print("Getting orderid from IB...")
             orderid = self.get_next_brokerorderid()
 
             if orderid is TIME_OUT:
@@ -471,14 +448,15 @@ if __name__ == '__main__':
     ibcontract = tr.create_contract('EUR', 'GBP')
 
     positions_list = app.get_current_positions()
-    if len(positions_list) !=0:
+    if len(positions_list) != 0:
         accountName = positions_list[0][0]
         accounting_values = app.get_accounting_values(accountName)
         accounting_updates = app.get_accounting_updates(accountName)
         pos_dict = app.get_positions_dict(positions_list)
 
-        print("acc balance:", accounting_values[18][1],accounting_values[18][2],
-              '\n', 'current positions:', '\n', pos_dict)
+        print(">> Balance:", accounting_values[18][1], accounting_values[18][2])
+        print('>> Current positions:')
+        print(pos_dict)
 
     else:
         print("_______No start positions_____")
@@ -507,7 +485,7 @@ if __name__ == '__main__':
 
     finally:
         accounting_values = app.get_accounting_values(accountName)
-        print("acc balance:", accounting_values[18][1],accounting_values[18][2])
+        print("acc balance:", accounting_values[18][1], accounting_values[18][2])
 
         app.disconnect()
         print('current positions:', '\n', pos_dict)
